@@ -1,0 +1,66 @@
+#!/bin/sh
+if [ "$#" -ne "4" ]; then
+  echo "USAGE: $0 <DEVICE> <VOLUME GROUP NAME> <LOGICAL VOLUME NAME> <MOUNT POINT>"
+  exit 1
+fi
+
+DV=$1
+VG=$2
+LV=$3
+MP=$4
+AZ=$(curl -s  http://169.254.169.254/latest/meta-data/placement/availability-zone/)
+RG=$(echo $Z | sed -e 's/[a-z]$//')
+IN=$(curl -s  http://169.254.169.254/latest/meta-data/instance-id)
+THRESHOLD=60
+
+calc_new_size() {
+  local curr_size=$1
+  local new_size=$curr_size
+
+  local m=$(echo "scale=0; ( $curr_size / 256 )" | bc -l)
+  if [ $m -eq 0 ]; then
+    new_size=256
+    # increase the free space THRESHOLD since we now have a lot more gigs to work with
+    THRESHOLD=80
+  elif [ $m -ge 8 ]; then
+    new_size=$(echo "$curr_size + 2048" | bc -l )
+    # increase the free space THRESHOLD since we now have a lot more gigs to work with
+    THRESHOLD=90
+  else
+    new_size=$(echo "$curr_size + (256 * $m)" | bc -l )
+  fi
+  echo ${new_size}
+}
+
+add_space () {
+  local curr_size=$(df  -BG /dev/${VG}/${LV} | grep ${VG} |awk '{print $2} ' | cut -d'G' -f1)
+  if [ $curr_size -lt 16384 ]; then
+    local new_size=$(calc_new_size $curr_size)
+    local ebs_volume=$(aws ec2 --region ${RG} --output text describe-volumes --filters Name=attachment.instance-id,Values=${IN},Name=attachment.device,Values=${DV} --query "Volumes[0].Attachments[0].VolumeId")
+    logthis "Extending volume $ebs_volume ($curr_size -> $new_size)"
+
+    # attach the new EBS volume to this host
+    aws ec2 modify-volume --region ${RG} --volume-id ${ebs_volume} --size ${new_size}
+
+    # Resize the Physical Volume
+    pvresize ${DV}
+
+    # get free extents in VG
+    local free_extents=$(vgdisplay ${VG} |grep "Free" | awk '{print $5}')
+    # extend the docker LV by the free extents
+    lvextend --resizefs --extents +${free_extents} /dev/${VG}/${LV}
+  fi
+}
+
+logthis () {
+  echo "[`date`] $1"
+}
+
+while true; do
+  F=$(df -h  ${MP} | grep -v Filesystem | awk '{print $5}' | cut -d"%" -f1 -)
+  if  [ $F -ge "${THRESHOLD}" ]; then
+    logthis "LOW DISK ($F): Adding more."
+    add_space
+  fi
+  sleep 5
+done
