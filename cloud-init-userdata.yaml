@@ -7,7 +7,6 @@ packages:
   - aws-cli
   - e2fsprogs
   - lvm2
-  - bc
   - sed
 
 runcmd:

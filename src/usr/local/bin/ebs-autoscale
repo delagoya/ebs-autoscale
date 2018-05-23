@@ -1,49 +1,69 @@
 #!/bin/sh
-if [ "$#" -ne "4" ]; then
-  echo "USAGE: $0 <DEVICE> <VOLUME GROUP NAME> <LOGICAL VOLUME NAME> <MOUNT POINT>"
+if [ "$#" -ne "2" ]; then
+  echo "USAGE: $0 <VOLUME GROUP NAME> <LOGICAL VOLUME NAME>"
   exit 1
 fi
 
-DV=$1
-VG=$2
-LV=$3
-MP=$4
+VG=$1
+LV=$2
+MP=$3
 AZ=$(curl -s  http://169.254.169.254/latest/meta-data/placement/availability-zone/)
 RG=$(echo ${AZ} | sed -e 's/[a-z]$//')
 IN=$(curl -s  http://169.254.169.254/latest/meta-data/instance-id)
 THRESHOLD=60
+DRIVE_LETTERS=({a..z})
 
 calc_new_size() {
   local curr_size=$1
+  local num_devices=$2
   local new_size=$curr_size
 
-  local m=$(echo "scale=0; ( $curr_size / 256 )" | bc -l)
-  if [ $m -eq 0 ]; then
-    new_size=256
-    # increase the free space THRESHOLD since we now have a lot more gigs to work with
-    THRESHOLD=80
-  elif [ $m -ge 8 ]; then
-    new_size=$(echo "$curr_size + 2048" | bc -l )
-    # increase the free space THRESHOLD since we now have a lot more gigs to work with
-    THRESHOLD=90
+  if [ "$num_devices" -ge "2" ]; then
+    new_size=512
+    THRESHOLD=85
+  elif [ "$num_devices" -ge "6" ]; then
+    new_size=1024
+    THRESHOLD=95
+  elif [ "$num_devices" -ge "10" ]; then
+    new_size=2048
+    THRESHOLD=95
   else
-    new_size=$(echo "$curr_size + (256 * $m)" | bc -l )
+    new_size=256
+    THRESHOLD=80
   fi
   echo ${new_size}
 }
 
 add_space () {
+  local num_devices=$(ls /dev/xvd* | grep -v -E '[0-9]$' | wc -l)
+  if [ "${num_devices}" -ge "16" ]; then
+    logthis("No more volumes can be safely added.")
+    return 0
+  fi
   local curr_size=$(df  -BG /dev/${VG}/${LV} | grep ${VG} |awk '{print $2} ' | cut -d'G' -f1)
-  if [ $curr_size -lt 16384 ]; then
-    local new_size=$(calc_new_size $curr_size)
-    local ebs_volume=$(aws ec2 --region ${RG} --output text describe-volumes --filters Name=attachment.instance-id,Values=${IN},Name=attachment.device,Values=${DV} --query "Volumes[0].Attachments[0].VolumeId")
-    logthis "Extending volume $ebs_volume ($curr_size -> $new_size)"
+  if [ "${curr_size}" -lt "16384" ]; then
+    local vol_size=$(calc_new_size $curr_size $num_devices)
+    # Get the next device ID
+    N=$(ls /dev/xvd* | grep -v -E '[0-9]$' | wc -l)
 
-    # attach the new EBS volume to this host
-    aws ec2 modify-volume --region ${RG} --volume-id ${ebs_volume} --size ${new_size}
+    DV="/dev/xvd${DRIVE_LETTERS[$N]}"
+    logthis "Extending LV $LV ($curr_size -> $new_size)"
 
-    # Resize the Physical Volume
-    pvresize ${DV}
+    # Create and attache the EBS Volume, also set it to delete on instance terminate
+    V=$(aws ec2 create-volume --region ${RG} --availability-zone ${AZ} --volume-type gp2 --size 10 --encrypted --query "VolumeId" | sed 's/\"//g' )
+
+    # await volume to become available
+    until [ "$(aws ec2 describe-volumes --volume-ids $V --region ${RG} --query "Volumes[0].State" | sed -e 's/\"//g')" == "available" ]; do
+      logthis("Volume $V not yet available.")
+      sleep 1
+    done
+
+    aws ec2 attach-volume --region ${RG} --device ${DV} --volume-id $V --instance-id ${IN}
+
+    # change the DeleteOnTermination volume attribute to true
+    aws ec2 modify-instance-attribute --region ${RG} --block-device-mappings "DeviceName=${DV},Ebs={DeleteOnTermination=true,VolumeId=$V}" --instance-id ${IN}
+    # Add the new device to the VG
+    vgextend ${VG} ${DV}
 
     # get free extents in VG
     local free_extents=$(vgdisplay ${VG} |grep "Free" | awk '{print $5}')
@@ -57,7 +77,7 @@ logthis () {
 }
 
 while true; do
-  F=$(df -h  ${MP} | grep -v Filesystem | awk '{print $5}' | cut -d"%" -f1 -)
+  F=$(df -h  /dev/${VG}/${LV} | grep -v Filesystem | awk '{print $5}' | cut -d"%" -f1 -)
   if  [ $F -ge "${THRESHOLD}" ]; then
     logthis "LOW DISK ($F): Adding more."
     add_space

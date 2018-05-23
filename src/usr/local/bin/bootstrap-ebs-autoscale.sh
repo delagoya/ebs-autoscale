@@ -1,8 +1,3 @@
-# if ebs-autoscale exe exists, skip bootstrap
-if [ -e /usr/local/bin/ebs-autoscale ]; then
-  exit 0
-fi
-
 function printUsage() {
   #statements
   echo "USAGE: $0 <VOLUME GROUP NAME> <LOGICAL VOLUME NAME> <MOUNT POINT>"
@@ -74,10 +69,8 @@ echo -e "/dev/${VG}/${LV}\t${MP}\text4\tdefaults\t0\t0" |  tee -a /etc/fstab
 # cd /opt/ebs-autoscale/etc/init
 cd $(dirname $0)/../../../
 cp etc/init/ebs-autoscale.conf.template ebs-autoscale.conf
-sed -i -e "s#YOUR_DV#${DV}#" ebs-autoscale.conf
 sed -i -e "s#YOUR_VG#${VG}#" ebs-autoscale.conf
 sed -i -e "s#YOUR_LV#${LV}#" ebs-autoscale.conf
-sed -i -e "s#YOUR_MP#${MP}#" ebs-autoscale.conf
 cp ebs-autoscale.conf  /etc/init/ebs-autoscale.conf
 # copy logrotate conf
 cp etc/logrotate.d/ebs-autoscale /etc/logrotate.d/ebs-autoscale
