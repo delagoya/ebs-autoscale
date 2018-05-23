@@ -10,7 +10,7 @@ MP=$3
 AZ=$(curl -s  http://169.254.169.254/latest/meta-data/placement/availability-zone/)
 RG=$(echo ${AZ} | sed -e 's/[a-z]$//')
 IN=$(curl -s  http://169.254.169.254/latest/meta-data/instance-id)
-THRESHOLD=60
+THRESHOLD=50
 DRIVE_LETTERS=({a..z})
 
 # make sure that this device is mounted.
@@ -21,13 +21,13 @@ calc_new_size() {
   local num_devices=$2
   local new_size=$curr_size
 
-  if [ "$num_devices" -ge "4" ]; then
+  if [ "$num_devices" -gt "4" ]; then
     new_size=512
     THRESHOLD=85
-  elif [ "$num_devices" -ge "8" ]; then
+  elif [ "$num_devices" -gt "8" ]; then
     new_size=1024
     THRESHOLD=95
-  elif [ "$num_devices" -ge "10" ]; then
+  elif [ "$num_devices" -gt "10" ]; then
     new_size=2048
     THRESHOLD=97
   else
