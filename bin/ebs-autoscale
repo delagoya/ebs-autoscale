@@ -4,16 +4,22 @@ if [ "$#" -ne "2" ]; then
   exit 1
 fi
 
+logthis () {
+  echo "[`date`] $1"
+}
+
 VG=$1
 LV=$2
 MP=$3
 AZ=$(curl -s  http://169.254.169.254/latest/meta-data/placement/availability-zone/)
 RG=$(echo ${AZ} | sed -e 's/[a-z]$//')
+logthis "Region = $RG."
 IN=$(curl -s  http://169.254.169.254/latest/meta-data/instance-id)
 THRESHOLD=50
 DRIVE_LETTERS=({a..z})
 
 # make sure that this device is mounted.
+umount /dev/${VG}/${LV}
 mount /dev/${VG}/${LV}
 
 calc_new_size() {
@@ -54,6 +60,7 @@ add_space () {
 
     # Create and attache the EBS Volume, also set it to delete on instance terminate
     V=$(aws ec2 create-volume --region ${RG} --availability-zone ${AZ} --volume-type gp2 --size ${vol_size} --encrypted --query "VolumeId" | sed 's/\"//g' )
+    logthis "Created volume $V."
 
     # await volume to become available
     until [ "$(aws ec2 describe-volumes --volume-ids $V --region ${RG} --query "Volumes[0].State" | sed -e 's/\"//g')" == "available" ]; do
@@ -80,15 +87,18 @@ add_space () {
   fi
 }
 
-logthis () {
-  echo "[`date`] $1"
-}
 
+COUNT=0
 while true; do
   F=$(df -h  /dev/${VG}/${LV} | grep -v Filesystem | awk '{print $5}' | cut -d"%" -f1 -)
   if  [ $F -ge "${THRESHOLD}" ]; then
     logthis "LOW DISK ($F): Adding more."
     add_space
   fi
+  if [ "${COUNT}" -ge "100" ]; then 
+    logthis "Free space $F."
+    COUNT=0
+  fi
+  COUNT=$(expr $COUNT + 1 )
   sleep 5
 done
