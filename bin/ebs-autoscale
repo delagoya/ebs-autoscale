@@ -12,6 +12,11 @@ VG=$1
 LV=$2
 MP=$3
 AZ=$(curl -s  http://169.254.169.254/latest/meta-data/placement/availability-zone/)
+while [ -z "${AZ}" ]; do
+  logthis "Metadata service did not return AZ. Trying again."
+  sleep 1
+  AZ=$(curl -s  http://169.254.169.254/latest/meta-data/placement/availability-zone/)
+done
 RG=$(echo ${AZ} | sed -e 's/[a-z]$//')
 logthis "Region = $RG."
 IN=$(curl -s  http://169.254.169.254/latest/meta-data/instance-id)
@@ -19,6 +24,10 @@ THRESHOLD=50
 DRIVE_LETTERS=({a..z})
 
 # make sure that this device is mounted.
+until [ -b "/dev/${VG}/${LV}" ]; do
+  sleep 1
+done
+logthis "Fixing device mounts"
 umount /dev/${VG}/${LV}
 mount /dev/${VG}/${LV}
 
@@ -83,8 +92,12 @@ add_space () {
     # get free extents in VG
     local free_extents=$(vgdisplay ${VG} |grep "Free" | awk '{print $5}')
     # extend the docker LV by the free extents
-    lvextend --resizefs --extents +${free_extents} /dev/${VG}/${LV}
+    lvextend --extents +${free_extents} /dev/${VG}/${LV}
+    mount /dev/${VG}/${LV}
+    resize2fs /dev/${VG}/${LV}
+
   fi
+  logthis "Finished extending device."
 }
 
 
@@ -95,8 +108,8 @@ while true; do
     logthis "LOW DISK ($F): Adding more."
     add_space
   fi
-  if [ "${COUNT}" -ge "100" ]; then 
-    logthis "Free space $F."
+  if [ "${COUNT}" -ge "100" ]; then
+    logthis "Used% -> ${F}%"
     COUNT=0
   fi
   COUNT=$(expr $COUNT + 1 )
