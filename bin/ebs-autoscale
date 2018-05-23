@@ -21,15 +21,15 @@ calc_new_size() {
   local num_devices=$2
   local new_size=$curr_size
 
-  if [ "$num_devices" -ge "2" ]; then
+  if [ "$num_devices" -ge "4" ]; then
     new_size=512
     THRESHOLD=85
-  elif [ "$num_devices" -ge "6" ]; then
+  elif [ "$num_devices" -ge "8" ]; then
     new_size=1024
     THRESHOLD=95
   elif [ "$num_devices" -ge "10" ]; then
     new_size=2048
-    THRESHOLD=95
+    THRESHOLD=97
   else
     new_size=256
     THRESHOLD=80
@@ -66,6 +66,10 @@ add_space () {
     # change the DeleteOnTermination volume attribute to true
     aws ec2 modify-instance-attribute --region ${RG} --block-device-mappings "DeviceName=${DV},Ebs={DeleteOnTermination=true,VolumeId=$V}" --instance-id ${IN}
     # Add the new device to the VG
+    until [ -b "${DV}" ]; do
+      logthis "Waiting for device $DV to become available"
+      sleep 1
+    done
     pvcreate ${DV}
     vgextend ${VG} ${DV}
 
