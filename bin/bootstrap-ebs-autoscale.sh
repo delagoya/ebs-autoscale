@@ -9,8 +9,8 @@ if [ "$#" -ne "3" ]; then
 fi
 
 # If the ebs-autoscale conf file exists, then we should exit
-if [ -b "$2" ]; then
-  echo "LOGICAL VOLUME exists $2."
+if [ -b "/dev/$1/$2" ]; then
+  echo "LOGICAL VOLUME /dev/$1/$2 exists."
   printUsage
   exit 1
 fi
@@ -66,17 +66,17 @@ mount /dev/${VG}/${LV} ${MP}
 echo -e "/dev/${VG}/${LV}\t${MP}\text4\tdefaults\t0\t0" |  tee -a /etc/fstab
 
 # copy out the upstart template
-# cd /opt/ebs-autoscale/etc/init
-cd $(dirname $0)/../../../
-cp etc/init/ebs-autoscale.conf.template ebs-autoscale.conf
+cd $(dirname $0)/../templates
+cp ebs-autoscale.conf.template ebs-autoscale.conf
 sed -i -e "s#YOUR_VG#${VG}#" ebs-autoscale.conf
 sed -i -e "s#YOUR_LV#${LV}#" ebs-autoscale.conf
 cp ebs-autoscale.conf  /etc/init/ebs-autoscale.conf
+
 # copy logrotate conf
-cp etc/logrotate.d/ebs-autoscale /etc/logrotate.d/ebs-autoscale
+cp ebs-autoscale.logrotate /etc/logrotate.d/ebs-autoscale
 
 # copy exe
-cp usr/local/bin/ebs-autoscale /usr/local/bin/ebs-autoscale
+cp $(dirname $0)/ebs-autoscale /usr/local/bin/ebs-autoscale
 
 # Register the ebs-autoscale upstart conf and start the service
 initctl reload-configuration

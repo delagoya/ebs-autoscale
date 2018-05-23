@@ -10,6 +10,6 @@ packages:
   - sed
 
 runcmd:
-  - curl -o /opt/ebs-autoscale.tar.gz http://cromwell-aws-batch.s3.amazonaws.com/files/ebs-autoscale.tar.gz
-  - cd /opt/ && tar -xzf ebs-autoscale.tar.gz
-  - sh /opt/ebs-autoscale/usr/local/bin/bootstrap-ebs-autoscale.sh  docker_scratch docker_scratch_pool /var/lib/docker/volumes/ 2>&1 > /var/log/bootstrap-ebs-autoscale.log
+  - curl -o /tmp/ebs-autoscale.tar.gz http://cromwell-aws-batch.s3.amazonaws.com/files/ebs-autoscale.tar.gz
+  - cd /tmp/ && tar -xzf ebs-autoscale.tar.gz
+  - sh /tmp/ebs-autoscale/bin/bootstrap-ebs-autoscale.sh  docker_scratch docker_scratch_pool /var/lib/docker/volumes/ 2>&1 > /var/log/bootstrap-ebs-autoscale.log
