@@ -4,7 +4,6 @@ repo_upgrade: all
 
 packages:
   - jq
-  - aws-cli
   - btrfs-progs
   - python27-pip
   - sed
@@ -13,4 +12,4 @@ runcmd:
   - pip install -U awscli boto3
   - curl -o /opt/ebs-autoscale.tar.gz http://cromwell-aws-batch.s3.amazonaws.com/files/ebs-autoscale.tar.gz
   - cd /opt/ && tar -xzf ebs-autoscale.tar.gz && rm -f ebs-autoscale.tar.gz
-  - sh /tmp/ebs-autoscale/bin/bootstrap-ebs-autoscale.sh /scratch /dev/xvdc  2>&1 > /var/log/bootstrap-ebs-autoscale.log
+  - sh /tmp/ebs-autoscale/bin/init-ebs-autoscale.sh /scratch /dev/xvdc  2>&1 > /var/log/init-ebs-autoscale.log
