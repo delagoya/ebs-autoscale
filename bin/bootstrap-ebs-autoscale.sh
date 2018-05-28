@@ -1,82 +1,41 @@
+#!/bin/sh
+
 function printUsage() {
   #statements
-  echo "USAGE: $0 <VOLUME GROUP NAME> <LOGICAL VOLUME NAME> <MOUNT POINT>"
+  echo "USAGE: $0 <MOUNT POINT> [<DEVICE>]"
 }
 
-if [ "$#" -ne "3" ]; then
+if [ "$#" -lt "1" ]; then
   printUsage
   exit 1
 fi
 
-# If the ebs-autoscale conf file exists, then we should exit
-if [ -b "/dev/$1/$2" ]; then
-  echo "LOGICAL VOLUME /dev/$1/$2 exists."
-  printUsage
-  exit 1
-fi
 
-VG=$1
-LV=$2
-MP=$3
+MP=$1
+DV=$2
+
 AZ=$(curl -s  http://169.254.169.254/latest/meta-data/placement/availability-zone/)
 RG=$(echo ${AZ} | sed -e 's/[a-z]$//')
 IN=$(curl -s  http://169.254.169.254/latest/meta-data/instance-id)
+BASEDIR=$(dirname $0)
 
-# Get the next device ID
-A=({a..z})
-N=$(ls /dev/xvd* | grep -v -E '[0-9]$' | wc -l)
-DV="/dev/xvd${A[$N]}"
-
-
-# Create and attache the EBS Volume, also set it to delete on instance terminate
-V=$(aws ec2 create-volume --region ${RG} --availability-zone ${AZ} --volume-type gp2 --size 10 --encrypted --query "VolumeId" | sed 's/\"//g' )
-
-# await volume to become available
-until [ "$(aws ec2 describe-volumes --volume-ids $V --region ${RG} --query "Volumes[0].State" | sed -e 's/\"//g')" == "available" ]; do
-  echo "Volume $V not yet available"
-  sleep 1
-done
-
-aws ec2 attach-volume --region ${RG} --device ${DV} --volume-id $V --instance-id ${IN}
-# change the DeleteOnTermination volume attribute to true
-aws ec2 modify-instance-attribute --region ${RG} --block-device-mappings "DeviceName=${DV},Ebs={DeleteOnTermination=true,VolumeId=$V}" --instance-id ${IN}
-
-# wait until device is available to start adding to PV
-until [ -b "${DV}" ]; do
-  echo "Volume ${DV} not yet available"
-  sleep 1
-done
-
-# Register the physical volume
-pvcreate ${DV}
-# create the new volume group
-vgcreate ${VG} ${DV}
-# get free extents in volume group
-E=$(vgdisplay ${VG} |grep "Free" | awk '{print $5}')
-
-# create the logical volume
-lvcreate -l $E  -n ${LV} ${VG}
-
-#make the filesystem and mount it
-mkfs.ext4 /dev/${VG}/${LV}
-if ! [ -d "${MP}" ]; then
-  mkdir -p ${MP}
+# If a device is not given, create one 20GB volume
+if [ -z "${DV}" ]; then
+  DV=$(python ${BASEDIR}/create-ebs-volume.py --size 20)
 fi
-mount /dev/${VG}/${LV} ${MP}
-echo -e "/dev/${VG}/${LV}\t${MP}\text4\tdefaults\t0\t0" |  tee -a /etc/fstab
+
+mkfs.btrfs -f -d single $DV
+mount $DV $MP
+
+echo -e "${DV}\t${MP}\tbtrfs\tdefaults\t0\t0" |  tee -a /etc/fstab
 
 # copy out the upstart template
-cd $(dirname $0)/../templates
-cp ebs-autoscale.conf.template ebs-autoscale.conf
-sed -i -e "s#YOUR_VG#${VG}#" ebs-autoscale.conf
-sed -i -e "s#YOUR_LV#${LV}#" ebs-autoscale.conf
-cp ebs-autoscale.conf  /etc/init/ebs-autoscale.conf
+cd ${BASEDIR}/../templates
+sed -e "s#YOUR_DEVICE#${DV}#" ebs-autoscale.conf.template > /etc/init/ebs-autoscale.conf
 
 # copy logrotate conf
 cp ebs-autoscale.logrotate /etc/logrotate.d/ebs-autoscale
 
-# copy exe
-cp $(dirname $0)/ebs-autoscale /usr/local/bin/ebs-autoscale
 
 # Register the ebs-autoscale upstart conf and start the service
 initctl reload-configuration
