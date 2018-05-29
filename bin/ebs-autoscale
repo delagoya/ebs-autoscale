@@ -25,15 +25,15 @@ DRIVE_LETTERS=({a..z})
 until [ -d "${MP}" ]; do
   sleep 1
 done
-calc_new_threshold() {
+calc_threshold() {
   local num_devices=$(ls /dev/xvd* | grep -v -E '[0-9]$' | wc -l)
-  local threshold=60
+  local threshold=50
   if [ "$num_devices" -gt "4" ] && [ "$num_devices" -le "6" ]; then
     threshold=80
   elif [ "$num_devices" -gt "6" ] && [ "$num_devices" -le "10"   ]; then
-    threshold=95
+    threshold=90
   else
-    threshold=60
+    threshold=50
   fi
   echo ${threshold}
 }
@@ -73,7 +73,7 @@ add_space () {
 }
 
 COUNT=300
-THRESHOLD=60
+THRESHOLD=$(calc_threshold)
 while true; do
   F=$(df -BG  ${MP} | grep -v Filesystem | awk '{print $5}' | cut -d"%" -f1 -)
   if  [ $F -ge "${THRESHOLD}" ]; then
@@ -84,7 +84,7 @@ while true; do
     logthis "Threshold -> ${THRESHOLD} :: Used% -> ${F}%"
     COUNT=0
   fi
-  THRESHOLD=$(calc_new_threshold)
+  THRESHOLD=$(calc_threshold)
   COUNT=$(expr $COUNT + 1 )
   sleep 1
 done
