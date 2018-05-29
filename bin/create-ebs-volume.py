@@ -75,4 +75,5 @@ def create_and_attach_volume(size=10):
 
 if __name__ == '__main__':
     args = parameters.parse_args()
-    print(create_and_attach_volume(args.size), end='', flush=True)
+    print(create_and_attach_volume(args.size), end='')
+    sys.stdout.flush()

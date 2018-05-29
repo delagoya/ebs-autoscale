@@ -25,17 +25,23 @@ if [ -z "${DV}" ]; then
 fi
 
 mkfs.btrfs -f -d single $DV
+
+if [ -e $MP ] && ! [ -d $MP ]; then
+  echo "ERR: $MP exists but is not a directory."
+  exit 1
+elif ! [ -e $MP ]; then
+  mkdir -p $MP
+fi
 mount $DV $MP
 
 echo -e "${DV}\t${MP}\tbtrfs\tdefaults\t0\t0" |  tee -a /etc/fstab
 
 # copy out the upstart template
 cd ${BASEDIR}/../templates
-sed -e "s#YOUR_DEVICE#${DV}#" ebs-autoscale.conf.template > /etc/init/ebs-autoscale.conf
+sed -e "s#YOUR_MOUNTPOINT#${MP}#" ebs-autoscale.conf.template > /etc/init/ebs-autoscale.conf
 
 # copy logrotate conf
 cp ebs-autoscale.logrotate /etc/logrotate.d/ebs-autoscale
-
 
 # Register the ebs-autoscale upstart conf and start the service
 initctl reload-configuration
