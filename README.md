@@ -10,7 +10,7 @@ This is an example of how to create a small daemon process that monitors a files
 
 Provided in this repo are:
 
-1. A [cloud-init](ebs-autoscale) file for installing the daemon and dependencies
+1. A [cloud-init](templates/cloud-init-userdate.yaml) file for installing the daemon and dependencies
 2. A example upstart configuration file
 3. A example logrotate configuration file
 4. The daemon script that monitors disk space and expands an EBS volume and associated LVM and FS.
@@ -18,4 +18,4 @@ Provided in this repo are:
 
 ## Installation
 
-The easiest way to set up an instance is to provide a launch call with the 
+The easiest way to set up an instance is to provide a launch call with the
