@@ -11,10 +11,10 @@ This is an example of how to create a small daemon process that monitors a files
 Provided in this repo are:
 
 1. A [cloud-init](templates/cloud-init-userdata.yaml) file for installing the daemon and dependencies
-2. A example upstart configuration file
-3. A example logrotate configuration file
-4. The daemon script that monitors disk space and expands an EBS volume and associated LVM and FS.
-5. Some other utility scripts
+2. A example [upstart configuration file](templates/ebs-autoscale.conf.template)
+3. A example [logrotate configuration file](templates/ebs-autoscale.logrotate)
+4. The daemon [script](bin/ebs-autoscale) that monitors disk space and expands an EBS volume and associated LVM and FS.
+5. Some other utility scripts in [`bin`](bin/)
 
 ## Installation
 
