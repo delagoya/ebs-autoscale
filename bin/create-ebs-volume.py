@@ -8,6 +8,8 @@ import argparse
 ## TODO: CLI arguments
 parameters = argparse.ArgumentParser(description="Create a new EBS Volume and attach it to the current instance")
 parameters.add_argument("-s","--size", type=int, required=True)
+parameters.add_argument("-t","--type", type=str, default="gp2")
+parameters.add_argument("-e","--encrypted", type=bool, default=True)
 
 def device_exists(path):
     try:
@@ -35,7 +37,7 @@ def get_metadata(key):
 
 
 # create a EBS volume
-def create_and_attach_volume(size=10):
+def create_and_attach_volume(size=10, vol_type="gp2", encrypted=True):
     instance_id  = get_metadata("instance-id")
     availability_zone = get_metadata("placement/availability-zone")
     region =  availability_zone[0:-1]
@@ -43,8 +45,8 @@ def create_and_attach_volume(size=10):
     instance = ec2.Instance(instance_id)
     volume = ec2.create_volume(
         AvailabilityZone=availability_zone,
-        Encrypted=True,
-        VolumeType="gp2",
+        Encrypted=encrypted,
+        VolumeType=vol_type,
         Size=size
     )
     while True:
@@ -75,4 +77,5 @@ def create_and_attach_volume(size=10):
 
 if __name__ == '__main__':
     args = parameters.parse_args()
-    print(create_and_attach_volume(args.size), end='', flush=True)
+    print(create_and_attach_volume(args.size, args.type, args.encrypted), end='')
+    sys.stdout.flush()
