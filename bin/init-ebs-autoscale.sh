@@ -19,8 +19,9 @@ RG=$(echo ${AZ} | sed -e 's/[a-z]$//')
 IN=$(curl -s  http://169.254.169.254/latest/meta-data/instance-id)
 BASEDIR=$(dirname $0)
 
-# If a device is not given, create one 20GB volume
-if [ -z "${DV}" ]; then
+# If a device is not given, or if the device is not valid
+# create a new 20GB volume
+if [ -z "${DV}" ] || [ ! -b "${DV}"]; then
   DV=$(python ${BASEDIR}/create-ebs-volume.py --size 20)
 fi
 
