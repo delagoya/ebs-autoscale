@@ -3,13 +3,12 @@ repo_update: true
 repo_upgrade: all
 
 packages:
-  - jq
   - btrfs-progs
   - python27-pip
   - sed
+  - git
 
 runcmd:
   - pip install -U awscli boto3
-  - curl -o /opt/ebs-autoscale.tar.gz http://cromwell-aws-batch.s3.amazonaws.com/files/ebs-autoscale.tar.gz
-  - cd /opt/ && tar -xzf ebs-autoscale.tar.gz && rm -f ebs-autoscale.tar.gz
-  - sh /tmp/ebs-autoscale/bin/init-ebs-autoscale.sh /scratch /dev/xvdc  2>&1 > /var/log/init-ebs-autoscale.log
+  - cd /opt && git clone https://github.com/delagoya/ebs-autoscale.git
+  - sh /opt/ebs-autoscale/bin/init-ebs-autoscale.sh /scratch /dev/xvdc  2>&1 > /var/log/init-ebs-autoscale.log
