@@ -5,11 +5,14 @@ import boto3
 import urllib
 import argparse
 
-## TODO: CLI arguments
+
 parameters = argparse.ArgumentParser(description="Create a new EBS Volume and attach it to the current instance")
 parameters.add_argument("-s","--size", type=int, required=True)
 parameters.add_argument("-t","--type", type=str, default="gp2")
 parameters.add_argument("-e","--encrypted", type=bool, default=True)
+parameters.add_argument("-i", "--instance-id", type=str)
+parameters.add_argument("-z", "--availability-zone", type=str)
+
 
 def device_exists(path):
     try:
@@ -17,29 +20,29 @@ def device_exists(path):
     except:
         return False
 
-alphabet = []
-for letter in range(97,123):
-    alphabet.append(chr(letter))
-
-def detect_devices():
-    devices = []
-    for device in glob.glob('/sys/block/*'):
-        if re.compile("xvd*").match(os.path.basename(device)):
-            devices.append(device)
+def detect_num_devices():
+    devices = 0
+    rgx = re.compile("sd.+|xvd.+")
+    for device in glob.glob('/dev/[sx]*'):
+        if rgx.match(os.path.basename(device)):
+            devices += 1
     return devices
 
 def get_next_logical_device():
-    d = "/dev/xvd{0}".format( alphabet[len(detect_devices())] )
-    return d
+    # first ASCII character letter integer is 97
+    device_name = "/dev/sd{0}".format( chr(97 + detect_num_devices()) )
+    return device_name
 
 def get_metadata(key):
     return urllib.urlopen(("/").join(['http://169.254.169.254/latest/meta-data', key])).read()
 
 
 # create a EBS volume
-def create_and_attach_volume(size=10, vol_type="gp2", encrypted=True):
-    instance_id  = get_metadata("instance-id")
-    availability_zone = get_metadata("placement/availability-zone")
+def create_and_attach_volume(size=20,
+                            vol_type="gp2",
+                            encrypted=True,
+                            instance_id=None,
+                            availability_zone=None):
     region =  availability_zone[0:-1]
     ec2 = boto3.resource("ec2", region_name=region)
     instance = ec2.Instance(instance_id)
@@ -77,5 +80,12 @@ def create_and_attach_volume(size=10, vol_type="gp2", encrypted=True):
 
 if __name__ == '__main__':
     args = parameters.parse_args()
-    print(create_and_attach_volume(args.size), end='')
+    if not args.instance_id:
+        args.instance_id  = get_metadata("instance-id")
+    if not args.availability_zone:
+        args.availability_zone = get_metadata("placement/availability-zone")
+    print(create_and_attach_volume(size=args.size,
+            instance_id=args.instance_id,
+            availability_zone=args.availability_zone),
+           end='')
     sys.stdout.flush()

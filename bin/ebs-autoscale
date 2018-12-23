@@ -64,7 +64,7 @@ add_space () {
     local vol_size=$(calc_new_size ${num_devices})
     logthis "Extending LV ${MP} by  ${vol_size}GB"
 
-    DV=$(python ${BASEDIR}/create-ebs-volume.py -s ${vol_size})
+    DV=$(python ${BASEDIR}/create-ebs-volume.py -s ${vol_size} -i  ${IN} -z ${AZ} )
     btrfs device add ${DV} ${MP}
     btrfs balance start -m ${MP}
 
